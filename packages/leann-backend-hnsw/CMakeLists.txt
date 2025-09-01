@@ -49,9 +49,18 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(FAISS_ENABLE_C_API OFF CACHE BOOL "" FORCE)
 set(FAISS_OPT_LEVEL "generic" CACHE STRING "" FORCE)
 
-# Disable additional SIMD versions to speed up compilation
+# Disable x86-specific SIMD optimizations (important for ARM64 compatibility)
 set(FAISS_ENABLE_AVX2 OFF CACHE BOOL "" FORCE)
 set(FAISS_ENABLE_AVX512 OFF CACHE BOOL "" FORCE)
+set(FAISS_ENABLE_SSE4_1 OFF CACHE BOOL "" FORCE)
+
+# ARM64-specific configuration
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    message(STATUS "Configuring Faiss for ARM64 architecture")
+    # Use SVE optimization level for ARM64 (as seen in Faiss conda build)
+    set(FAISS_OPT_LEVEL "sve" CACHE STRING "" FORCE)
+    message(STATUS "Setting FAISS_OPT_LEVEL to 'sve' for ARM64")
+endif()
 
 # Additional optimization options from INSTALL.md
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
