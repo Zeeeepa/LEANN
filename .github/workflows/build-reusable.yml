@@ -170,6 +170,12 @@ jobs:
             uv pip install --python "$BUILD_PY" delocate
           fi
 
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$(pwd)\\.uv-build\\Scripts" >> $GITHUB_PATH
+          else
+            echo "$(pwd)/.uv-build/bin" >> $GITHUB_PATH
+          fi
+
       - name: Set macOS environment variables
         if: runner.os == 'macOS'
         run: |
