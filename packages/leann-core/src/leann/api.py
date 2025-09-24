@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 import numpy as np
+from leann_backend_hnsw.convert_to_csr import prune_hnsw_embeddings_inplace
 
 from leann.interface import LeannBackendSearcherInterface
 
@@ -38,6 +39,7 @@ def compute_embeddings(
     use_server: bool = True,
     port: Optional[int] = None,
     is_build=False,
+    provider_options: Optional[dict[str, Any]] = None,
 ) -> np.ndarray:
     """
     Computes embeddings using different backends.
@@ -71,6 +73,7 @@ def compute_embeddings(
             model_name,
             mode=mode,
             is_build=is_build,
+            provider_options=provider_options,
         )
 
 
@@ -277,6 +280,7 @@ class LeannBuilder:
         embedding_model: str = "facebook/contriever",
         dimensions: Optional[int] = None,
         embedding_mode: str = "sentence-transformers",
+        embedding_options: Optional[dict[str, Any]] = None,
         **backend_kwargs,
     ):
         self.backend_name = backend_name
@@ -299,6 +303,7 @@ class LeannBuilder:
         self.embedding_model = embedding_model
         self.dimensions = dimensions
         self.embedding_mode = embedding_mode
+        self.embedding_options = embedding_options or {}
 
         # Check if we need to use cosine distance for normalized embeddings
         normalized_embeddings_models = {
@@ -406,6 +411,7 @@ class LeannBuilder:
                     self.embedding_model,
                     self.embedding_mode,
                     use_server=False,
+                    provider_options=self.embedding_options,
                 )[0]
             )
         path = Path(index_path)
@@ -445,6 +451,7 @@ class LeannBuilder:
             self.embedding_mode,
             use_server=False,
             is_build=True,
+            provider_options=self.embedding_options,
         )
         string_ids = [chunk["id"] for chunk in self.chunks]
         # Persist ID map alongside index so backends that return integer labels can remap to passage IDs
@@ -482,14 +489,15 @@ class LeannBuilder:
             ],
         }
 
+        if self.embedding_options:
+            meta_data["embedding_options"] = self.embedding_options
+
         # Add storage status flags for HNSW backend
         if self.backend_name == "hnsw":
             is_compact = self.backend_kwargs.get("is_compact", True)
             is_recompute = self.backend_kwargs.get("is_recompute", True)
             meta_data["is_compact"] = is_compact
-            meta_data["is_pruned"] = (
-                is_compact and is_recompute
-            )  # Pruned only if compact and recompute
+            meta_data["is_pruned"] = bool(is_recompute)
         with open(leann_meta_path, "w", encoding="utf-8") as f:
             json.dump(meta_data, f, indent=2)
 
@@ -615,17 +623,165 @@ class LeannBuilder:
             "embeddings_source": str(embeddings_file),
         }
 
+        if self.embedding_options:
+            meta_data["embedding_options"] = self.embedding_options
+
         # Add storage status flags for HNSW backend
         if self.backend_name == "hnsw":
             is_compact = self.backend_kwargs.get("is_compact", True)
             is_recompute = self.backend_kwargs.get("is_recompute", True)
             meta_data["is_compact"] = is_compact
-            meta_data["is_pruned"] = is_compact and is_recompute
+            meta_data["is_pruned"] = bool(is_recompute)
 
         with open(leann_meta_path, "w", encoding="utf-8") as f:
             json.dump(meta_data, f, indent=2)
 
         logger.info(f"Index built successfully from precomputed embeddings: {index_path}")
+
+    def update_index(self, index_path: str):
+        """Append new passages and vectors to an existing HNSW index."""
+        if not self.chunks:
+            raise ValueError("No new chunks provided for update.")
+
+        path = Path(index_path)
+        index_dir = path.parent
+        index_name = path.name
+        index_prefix = path.stem
+
+        meta_path = index_dir / f"{index_name}.meta.json"
+        passages_file = index_dir / f"{index_name}.passages.jsonl"
+        offset_file = index_dir / f"{index_name}.passages.idx"
+        index_file = index_dir / f"{index_prefix}.index"
+
+        if not meta_path.exists() or not passages_file.exists() or not offset_file.exists():
+            raise FileNotFoundError("Index metadata or passage files are missing; cannot update.")
+        if not index_file.exists():
+            raise FileNotFoundError(f"HNSW index file not found: {index_file}")
+
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+        backend_name = meta.get("backend_name")
+        if backend_name != self.backend_name:
+            raise ValueError(
+                f"Index was built with backend '{backend_name}', cannot update with '{self.backend_name}'."
+            )
+
+        meta_backend_kwargs = meta.get("backend_kwargs", {})
+        index_is_compact = meta.get("is_compact", meta_backend_kwargs.get("is_compact", True))
+        if index_is_compact:
+            raise ValueError(
+                "Compact HNSW indices do not support in-place updates. Rebuild required."
+            )
+
+        distance_metric = meta_backend_kwargs.get(
+            "distance_metric", self.backend_kwargs.get("distance_metric", "mips")
+        ).lower()
+        needs_recompute = bool(
+            meta.get("is_pruned")
+            or meta_backend_kwargs.get("is_recompute")
+            or self.backend_kwargs.get("is_recompute")
+        )
+
+        with open(offset_file, "rb") as f:
+            offset_map: dict[str, int] = pickle.load(f)
+        existing_ids = set(offset_map.keys())
+
+        valid_chunks: list[dict[str, Any]] = []
+        for chunk in self.chunks:
+            text = chunk.get("text", "")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            metadata = chunk.setdefault("metadata", {})
+            passage_id = chunk.get("id") or metadata.get("id")
+            if passage_id and passage_id in existing_ids:
+                raise ValueError(f"Passage ID '{passage_id}' already exists in the index.")
+            valid_chunks.append(chunk)
+
+        if not valid_chunks:
+            raise ValueError("No valid chunks to append.")
+
+        texts_to_embed = [chunk["text"] for chunk in valid_chunks]
+        embeddings = compute_embeddings(
+            texts_to_embed,
+            self.embedding_model,
+            self.embedding_mode,
+            use_server=False,
+            is_build=True,
+            provider_options=self.embedding_options,
+        )
+
+        embedding_dim = embeddings.shape[1]
+        expected_dim = meta.get("dimensions")
+        if expected_dim is not None and expected_dim != embedding_dim:
+            raise ValueError(
+                f"Dimension mismatch during update: existing index uses {expected_dim}, got {embedding_dim}."
+            )
+
+        from leann_backend_hnsw import faiss  # type: ignore
+
+        embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
+        if distance_metric == "cosine":
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms[norms == 0] = 1
+            embeddings = embeddings / norms
+
+        index = faiss.read_index(str(index_file))
+        if hasattr(index, "is_recompute"):
+            index.is_recompute = needs_recompute
+        if getattr(index, "storage", None) is None:
+            if index.metric_type == faiss.METRIC_INNER_PRODUCT:
+                storage_index = faiss.IndexFlatIP(index.d)
+            else:
+                storage_index = faiss.IndexFlatL2(index.d)
+            index.storage = storage_index
+            index.own_fields = True
+        if index.d != embedding_dim:
+            raise ValueError(
+                f"Existing index dimension ({index.d}) does not match new embeddings ({embedding_dim})."
+            )
+
+        base_id = index.ntotal
+        for offset, chunk in enumerate(valid_chunks):
+            new_id = str(base_id + offset)
+            chunk.setdefault("metadata", {})["id"] = new_id
+            chunk["id"] = new_id
+
+        index.add(embeddings.shape[0], faiss.swig_ptr(embeddings))
+        faiss.write_index(index, str(index_file))
+
+        with open(passages_file, "a", encoding="utf-8") as f:
+            for chunk in valid_chunks:
+                offset = f.tell()
+                json.dump(
+                    {
+                        "id": chunk["id"],
+                        "text": chunk["text"],
+                        "metadata": chunk.get("metadata", {}),
+                    },
+                    f,
+                    ensure_ascii=False,
+                )
+                f.write("\n")
+                offset_map[chunk["id"]] = offset
+
+        with open(offset_file, "wb") as f:
+            pickle.dump(offset_map, f)
+
+        meta["total_passages"] = len(offset_map)
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
+
+        logger.info(
+            "Appended %d passages to index '%s'. New total: %d",
+            len(valid_chunks),
+            index_path,
+            len(offset_map),
+        )
+
+        self.chunks.clear()
+
+        if needs_recompute:
+            prune_hnsw_embeddings_inplace(str(index_file))
 
 
 class LeannSearcher:
@@ -650,6 +806,7 @@ class LeannSearcher:
         self.embedding_model = self.meta_data["embedding_model"]
         # Support both old and new format
         self.embedding_mode = self.meta_data.get("embedding_mode", "sentence-transformers")
+        self.embedding_options = self.meta_data.get("embedding_options", {})
         # Delegate portability handling to PassageManager
         self.passage_manager = PassageManager(
             self.meta_data.get("passage_sources", []), metadata_file_path=self.meta_path_str
@@ -661,6 +818,8 @@ class LeannSearcher:
             raise ValueError(f"Backend '{backend_name}' not found.")
         final_kwargs = {**self.meta_data.get("backend_kwargs", {}), **backend_kwargs}
         final_kwargs["enable_warmup"] = enable_warmup
+        if self.embedding_options:
+            final_kwargs.setdefault("embedding_options", self.embedding_options)
         self.backend_impl: LeannBackendSearcherInterface = backend_factory.searcher(
             index_path, **final_kwargs
         )

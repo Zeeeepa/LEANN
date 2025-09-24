@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import sys
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -10,6 +9,7 @@ from tqdm import tqdm
 
 from .api import LeannBuilder, LeannChat, LeannSearcher
 from .registry import register_project_directory
+from .settings import resolve_ollama_host, resolve_openai_api_key, resolve_openai_base_url
 
 
 def extract_pdf_text_with_pymupdf(file_path: str) -> str:
@@ -123,6 +123,24 @@ Examples:
             default="sentence-transformers",
             choices=["sentence-transformers", "openai", "mlx", "ollama"],
             help="Embedding backend mode (default: sentence-transformers)",
+        )
+        build_parser.add_argument(
+            "--embedding-host",
+            type=str,
+            default=None,
+            help="Override Ollama-compatible embedding host",
+        )
+        build_parser.add_argument(
+            "--embedding-api-base",
+            type=str,
+            default=None,
+            help="Base URL for OpenAI-compatible embedding services",
+        )
+        build_parser.add_argument(
+            "--embedding-api-key",
+            type=str,
+            default=None,
+            help="API key for embedding service (defaults to OPENAI_API_KEY)",
         )
         build_parser.add_argument(
             "--force", "-f", action="store_true", help="Force rebuild existing index"
@@ -240,6 +258,11 @@ Examples:
         ask_parser = subparsers.add_parser("ask", help="Ask questions")
         ask_parser.add_argument("index_name", help="Index name")
         ask_parser.add_argument(
+            "query",
+            nargs="?",
+            help="Question to ask (omit for prompt or when using --interactive)",
+        )
+        ask_parser.add_argument(
             "--llm",
             type=str,
             default="ollama",
@@ -249,7 +272,12 @@ Examples:
         ask_parser.add_argument(
             "--model", type=str, default="qwen3:8b", help="Model name (default: qwen3:8b)"
         )
-        ask_parser.add_argument("--host", type=str, default="http://localhost:11434")
+        ask_parser.add_argument(
+            "--host",
+            type=str,
+            default=None,
+            help="Override Ollama-compatible host (defaults to LEANN_OLLAMA_HOST/OLLAMA_HOST)",
+        )
         ask_parser.add_argument(
             "--interactive", "-i", action="store_true", help="Interactive chat mode"
         )
@@ -277,6 +305,18 @@ Examples:
             choices=["low", "medium", "high"],
             default=None,
             help="Thinking budget for reasoning models (low/medium/high). Supported by GPT-Oss:20b and other reasoning models.",
+        )
+        ask_parser.add_argument(
+            "--api-base",
+            type=str,
+            default=None,
+            help="Base URL for OpenAI-compatible APIs (e.g., http://localhost:10000/v1)",
+        )
+        ask_parser.add_argument(
+            "--api-key",
+            type=str,
+            default=None,
+            help="API key for OpenAI-compatible APIs (defaults to OPENAI_API_KEY)",
         )
 
         # List command
@@ -1216,13 +1256,8 @@ Examples:
         if use_ast:
             print("🧠 Using AST-aware chunking for code files")
             try:
-                # Import enhanced chunking utilities
-                # Add apps directory to path to import chunking utilities
-                apps_dir = Path(__file__).parent.parent.parent.parent.parent / "apps"
-                if apps_dir.exists():
-                    sys.path.insert(0, str(apps_dir))
-
-                from chunking import create_text_chunks
+                # Import enhanced chunking utilities from packaged module
+                from .chunking_utils import create_text_chunks
 
                 # Use enhanced chunking with AST support
                 all_texts = create_text_chunks(
@@ -1237,7 +1272,9 @@ Examples:
                 )
 
             except ImportError as e:
-                print(f"⚠️  AST chunking not available ({e}), falling back to traditional chunking")
+                print(
+                    f"⚠️  AST chunking utilities not available in package ({e}), falling back to traditional chunking"
+                )
                 use_ast = False
 
         if not use_ast:
@@ -1329,10 +1366,20 @@ Examples:
 
         print(f"Building index '{index_name}' with {args.backend} backend...")
 
+        embedding_options: dict[str, Any] = {}
+        if args.embedding_mode == "ollama":
+            embedding_options["host"] = resolve_ollama_host(args.embedding_host)
+        elif args.embedding_mode == "openai":
+            embedding_options["base_url"] = resolve_openai_base_url(args.embedding_api_base)
+            resolved_embedding_key = resolve_openai_api_key(args.embedding_api_key)
+            if resolved_embedding_key:
+                embedding_options["api_key"] = resolved_embedding_key
+
         builder = LeannBuilder(
             backend_name=args.backend,
             embedding_model=args.embedding_model,
             embedding_mode=args.embedding_mode,
+            embedding_options=embedding_options or None,
             graph_degree=args.graph_degree,
             complexity=args.complexity,
             is_compact=args.compact,
@@ -1480,11 +1527,38 @@ Examples:
 
         llm_config = {"type": args.llm, "model": args.model}
         if args.llm == "ollama":
-            llm_config["host"] = args.host
+            llm_config["host"] = resolve_ollama_host(args.host)
+        elif args.llm == "openai":
+            llm_config["base_url"] = resolve_openai_base_url(args.api_base)
+            resolved_api_key = resolve_openai_api_key(args.api_key)
+            if resolved_api_key:
+                llm_config["api_key"] = resolved_api_key
 
         chat = LeannChat(index_path=index_path, llm_config=llm_config)
 
+        llm_kwargs: dict[str, Any] = {}
+        if args.thinking_budget:
+            llm_kwargs["thinking_budget"] = args.thinking_budget
+
+        def _ask_once(prompt: str) -> None:
+            response = chat.ask(
+                prompt,
+                top_k=args.top_k,
+                complexity=args.complexity,
+                beam_width=args.beam_width,
+                prune_ratio=args.prune_ratio,
+                recompute_embeddings=args.recompute_embeddings,
+                pruning_strategy=args.pruning_strategy,
+                llm_kwargs=llm_kwargs,
+            )
+            print(f"LEANN: {response}")
+
+        initial_query = (args.query or "").strip()
+
         if args.interactive:
+            if initial_query:
+                _ask_once(initial_query)
+
             print("LEANN Assistant ready! Type 'quit' to exit")
             print("=" * 40)
 
@@ -1497,41 +1571,14 @@ Examples:
                 if not user_input:
                     continue
 
-                # Prepare LLM kwargs with thinking budget if specified
-                llm_kwargs = {}
-                if args.thinking_budget:
-                    llm_kwargs["thinking_budget"] = args.thinking_budget
-
-                response = chat.ask(
-                    user_input,
-                    top_k=args.top_k,
-                    complexity=args.complexity,
-                    beam_width=args.beam_width,
-                    prune_ratio=args.prune_ratio,
-                    recompute_embeddings=args.recompute_embeddings,
-                    pruning_strategy=args.pruning_strategy,
-                    llm_kwargs=llm_kwargs,
-                )
-                print(f"LEANN: {response}")
+                _ask_once(user_input)
         else:
-            query = input("Enter your question: ").strip()
-            if query:
-                # Prepare LLM kwargs with thinking budget if specified
-                llm_kwargs = {}
-                if args.thinking_budget:
-                    llm_kwargs["thinking_budget"] = args.thinking_budget
+            query = initial_query or input("Enter your question: ").strip()
+            if not query:
+                print("No question provided. Exiting.")
+                return
 
-                response = chat.ask(
-                    query,
-                    top_k=args.top_k,
-                    complexity=args.complexity,
-                    beam_width=args.beam_width,
-                    prune_ratio=args.prune_ratio,
-                    recompute_embeddings=args.recompute_embeddings,
-                    pruning_strategy=args.pruning_strategy,
-                    llm_kwargs=llm_kwargs,
-                )
-                print(f"LEANN: {response}")
+            _ask_once(query)
 
     async def run(self, args=None):
         parser = self.create_parser()
