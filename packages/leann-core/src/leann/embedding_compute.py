@@ -184,28 +184,32 @@ def compute_embeddings_sentence_transformers(
 
         try:
             # Try local loading first
-            model_kwargs["local_files_only"] = True
-            tokenizer_kwargs["local_files_only"] = True
+            local_model_kwargs = model_kwargs.copy()
+            local_tokenizer_kwargs = tokenizer_kwargs.copy()
+            local_model_kwargs["local_files_only"] = True
+            local_tokenizer_kwargs["local_files_only"] = True
 
             model = SentenceTransformer(
                 model_name,
                 device=device,
-                model_kwargs=model_kwargs,
-                tokenizer_kwargs=tokenizer_kwargs,
+                model_kwargs=local_model_kwargs,
+                tokenizer_kwargs=local_tokenizer_kwargs,
                 local_files_only=True,
             )
             logger.info("Model loaded successfully! (local + optimized)")
         except Exception as e:
             logger.warning(f"Local loading failed ({e}), trying network download...")
             # Fallback to network loading
-            model_kwargs["local_files_only"] = False
-            tokenizer_kwargs["local_files_only"] = False
+            network_model_kwargs = model_kwargs.copy()
+            network_tokenizer_kwargs = tokenizer_kwargs.copy()
+            network_model_kwargs["local_files_only"] = False
+            network_tokenizer_kwargs["local_files_only"] = False
 
             model = SentenceTransformer(
                 model_name,
                 device=device,
-                model_kwargs=model_kwargs,
-                tokenizer_kwargs=tokenizer_kwargs,
+                model_kwargs=network_model_kwargs,
+                tokenizer_kwargs=network_tokenizer_kwargs,
                 local_files_only=False,
             )
             logger.info("Model loaded successfully! (network + optimized)")
