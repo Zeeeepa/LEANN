@@ -10,7 +10,7 @@ flexible message processing options.
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class SlackMCPReader:
             await self.mcp_process.wait()
             logger.info("Stopped MCP server")
 
-    async def send_mcp_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_mcp_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Send a request to the MCP server and get response."""
         if not self.mcp_process:
             raise RuntimeError("MCP server not started")
@@ -100,7 +100,7 @@ class SlackMCPReader:
 
         logger.info("MCP connection initialized successfully")
 
-    async def list_available_tools(self) -> List[Dict[str, Any]]:
+    async def list_available_tools(self) -> list[dict[str, Any]]:
         """List available tools from the MCP server."""
         list_request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
 
@@ -112,7 +112,7 @@ class SlackMCPReader:
 
     async def fetch_slack_messages(
         self, channel: Optional[str] = None, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch Slack messages using MCP tools.
 
@@ -180,7 +180,7 @@ class SlackMCPReader:
 
         return messages if isinstance(messages, list) else [messages]
 
-    def _format_message(self, message: Dict[str, Any]) -> str:
+    def _format_message(self, message: dict[str, Any]) -> str:
         """Format a single message for indexing."""
         text = message.get("text", "")
         user = message.get("user", message.get("username", "Unknown"))
@@ -217,7 +217,7 @@ class SlackMCPReader:
 
         return "\n".join(parts)
 
-    def _create_concatenated_content(self, messages: List[Dict[str, Any]], channel: str) -> str:
+    def _create_concatenated_content(self, messages: list[dict[str, Any]], channel: str) -> str:
         """Create concatenated content from multiple messages in a channel."""
         if not messages:
             return ""
@@ -251,7 +251,7 @@ class SlackMCPReader:
 
         return "\n".join(content_parts)
 
-    async def read_slack_data(self, channels: Optional[List[str]] = None) -> List[str]:
+    async def read_slack_data(self, channels: Optional[list[str]] = None) -> list[str]:
         """
         Read Slack data and return formatted text chunks.
 

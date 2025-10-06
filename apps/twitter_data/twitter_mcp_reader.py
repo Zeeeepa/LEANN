@@ -10,7 +10,7 @@ flexible bookmark processing options.
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class TwitterMCPReader:
             await self.mcp_process.wait()
             logger.info("Stopped MCP server")
 
-    async def send_mcp_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_mcp_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Send a request to the MCP server and get response."""
         if not self.mcp_process:
             raise RuntimeError("MCP server not started")
@@ -103,7 +103,7 @@ class TwitterMCPReader:
 
         logger.info("MCP connection initialized successfully")
 
-    async def list_available_tools(self) -> List[Dict[str, Any]]:
+    async def list_available_tools(self) -> list[dict[str, Any]]:
         """List available tools from the MCP server."""
         list_request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
 
@@ -113,7 +113,7 @@ class TwitterMCPReader:
 
         return response.get("result", {}).get("tools", [])
 
-    async def fetch_twitter_bookmarks(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def fetch_twitter_bookmarks(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
         """
         Fetch Twitter bookmarks using MCP tools.
 
@@ -171,7 +171,7 @@ class TwitterMCPReader:
 
         return bookmarks if isinstance(bookmarks, list) else [bookmarks]
 
-    def _format_bookmark(self, bookmark: Dict[str, Any]) -> str:
+    def _format_bookmark(self, bookmark: dict[str, Any]) -> str:
         """Format a single bookmark for indexing."""
         # Extract tweet information
         text = bookmark.get("text", bookmark.get("content", ""))
@@ -242,7 +242,7 @@ class TwitterMCPReader:
 
         return "\n".join(parts)
 
-    async def read_twitter_bookmarks(self) -> List[str]:
+    async def read_twitter_bookmarks(self) -> list[str]:
         """
         Read Twitter bookmark data and return formatted text chunks.
 

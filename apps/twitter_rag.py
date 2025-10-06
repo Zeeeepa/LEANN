@@ -12,7 +12,6 @@ Usage:
 import argparse
 import asyncio
 from pathlib import Path
-from typing import List
 
 from apps.base_rag_example import BaseRAGExample
 from apps.twitter_data.twitter_mcp_reader import TwitterMCPReader
@@ -113,7 +112,7 @@ class TwitterMCPRAG(BaseRAGExample):
             print("5. Try running the MCP server command directly to test it")
             return False
             
-    async def load_data(self, args) -> List[str]:
+    async def load_data(self, args) -> list[str]:
         """Load Twitter bookmarks via MCP server."""
         print(f"Connecting to Twitter MCP server: {args.mcp_server}")
         

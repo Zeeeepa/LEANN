@@ -26,7 +26,7 @@ def test_slack_reader_initialization():
     # Test basic initialization
     reader = SlackMCPReader("slack-mcp-server")
     assert reader.mcp_server_command == "slack-mcp-server"
-    assert reader.concatenate_conversations == True
+    assert reader.concatenate_conversations
     assert reader.max_messages_per_conversation == 100
     
     # Test with custom parameters
@@ -37,7 +37,7 @@ def test_slack_reader_initialization():
         max_messages_per_conversation=50
     )
     assert reader.workspace_name == "test-workspace"
-    assert reader.concatenate_conversations == False
+    assert not reader.concatenate_conversations
     assert reader.max_messages_per_conversation == 50
     
     print("✅ SlackMCPReader initialization tests passed")
@@ -50,8 +50,8 @@ def test_twitter_reader_initialization():
     # Test basic initialization
     reader = TwitterMCPReader("twitter-mcp-server")
     assert reader.mcp_server_command == "twitter-mcp-server"
-    assert reader.include_tweet_content == True
-    assert reader.include_metadata == True
+    assert reader.include_tweet_content
+    assert reader.include_metadata
     assert reader.max_bookmarks == 1000
     
     # Test with custom parameters
@@ -63,8 +63,8 @@ def test_twitter_reader_initialization():
         max_bookmarks=500
     )
     assert reader.username == "testuser"
-    assert reader.include_tweet_content == False
-    assert reader.include_metadata == False
+    assert not reader.include_tweet_content
+    assert not reader.include_metadata
     assert reader.max_bookmarks == 500
     
     print("✅ TwitterMCPReader initialization tests passed")

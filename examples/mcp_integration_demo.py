@@ -32,7 +32,7 @@ async def demo_slack_mcp():
     
     # This would typically use a real MCP server command
     # For demo purposes, we show what the command would look like
-    slack_app = SlackMCPRAG()
+    # slack_app = SlackMCPRAG()  # Would be used for actual testing
     
     # Simulate command line arguments for testing
     class MockArgs:
@@ -71,7 +71,7 @@ async def demo_twitter_mcp():
     
     print("\n1. Testing Twitter MCP server connection...")
     
-    twitter_app = TwitterMCPRAG()
+    # twitter_app = TwitterMCPRAG()  # Would be used for actual testing
     
     class MockArgs:
         mcp_server = "twitter-mcp-server"

@@ -23,7 +23,7 @@ def test_slack_reader_basic():
     
     reader = SlackMCPReader("slack-mcp-server")
     assert reader.mcp_server_command == "slack-mcp-server"
-    assert reader.concatenate_conversations == True
+    assert reader.concatenate_conversations
     
     # Test message formatting
     message = {
@@ -61,7 +61,7 @@ def test_twitter_reader_basic():
     
     reader = TwitterMCPReader("twitter-mcp-server")
     assert reader.mcp_server_command == "twitter-mcp-server"
-    assert reader.include_tweet_content == True
+    assert reader.include_tweet_content
     assert reader.max_bookmarks == 1000
     
     # Test bookmark formatting
