@@ -145,7 +145,7 @@ WARNING - Failed to fetch messages from channel random: Failed to fetch messages
    ```bash
    # Terminal 1: Start MCP server
    slack-mcp-server
-   
+
    # Terminal 2: Run LEANN (it will connect to the running server)
    python -m apps.slack_rag --mcp-server "slack-mcp-server" --channels general --query "test"
    ```
@@ -154,7 +154,7 @@ WARNING - Failed to fetch messages from channel random: Failed to fetch messages
 
 **Problem**: The MCP server doesn't have the expected tools.
 
-**Solution**: 
+**Solution**:
 1. Check if your MCP server is properly installed and configured
 2. Verify your Slack tokens are correct
 3. Try a different MCP server implementation
