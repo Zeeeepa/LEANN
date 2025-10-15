@@ -312,7 +312,7 @@ This example shows a real query against the Sky Lab Computing workspace’s “r
 
 ### Screenshot
 
-![Sky Random RAG](docs/videos/rag-sky-random.png)
+![Sky Random RAG](videos/rag-sky-random.png)
 
 ### Prerequisites
 
