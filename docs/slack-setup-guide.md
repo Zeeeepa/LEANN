@@ -296,7 +296,7 @@ python -m apps.slack_rag \
 
 Here's what you'll see when running a RAG query on your Slack workspace:
 
-![RAG Query Results](rag-query-results.png)
+
 
 **What this screenshot shows:**
 - ✅ **Successful MCP connection** to Slack workspace
@@ -312,7 +312,7 @@ This example shows a real query against the Sky Lab Computing workspace’s “r
 
 ### Screenshot
 
-![Sky Random RAG](videos/rag-sky-random.png)
+![Sky Random RAG](docs/videos/rag-sky-random.png)
 
 ### Prerequisites
 

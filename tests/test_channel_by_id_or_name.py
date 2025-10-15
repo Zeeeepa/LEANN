@@ -120,9 +120,9 @@ async def fetch(
             print("=" * 60)
             q_terms = [t.strip().lower() for t in query.split() if t.strip()]
             lines = [
-                l
-                for l in (text_blob.splitlines() if text_blob else [])
-                if l and not l.startswith("MsgID,")
+                line
+                for line in (text_blob.splitlines() if text_blob else [])
+                if line and not line.startswith("MsgID,")
             ]
             # Score lines by count of query terms present
             scored = []
