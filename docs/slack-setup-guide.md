@@ -122,20 +122,20 @@ python -m apps.slack_rag \
 
 ### 4.3 Real RAG Query Example
 
-This example demonstrates a successful Slack RAG integration query against the Sky Lab Computing workspace's "random" channel. The system successfully retrieves actual conversation messages and performs semantic search with high relevance scores.
+This example demonstrates a successful Slack RAG integration query against the Sky Lab Computing workspace's "random" channel. The system successfully retrieves actual conversation messages and performs semantic search with high relevance scores, including finding specific LEANN announcements.
 
 **Key Features Demonstrated:**
-- ✅ **Real Slack Integration**: Successfully connects to Slack via MCP server
-- ✅ **Actual Message Retrieval**: Fetches real conversation history, not just metadata
-- ✅ **Working RAG Pipeline**: Complete index building, search, and response generation
-- ✅ **High Relevance Search**: Score of 0.5673 for research papers query
-- ✅ **Rich Content**: Real research discussions about AI papers, lab updates, etc.
+- **Real Slack Integration**: Successfully connects to Slack via MCP server
+- **Actual Message Retrieval**: Fetches real conversation history including specific announcements
+- **Working RAG Pipeline**: Complete index building, search, and response generation
+- **High Relevance Search**: Successfully finds and retrieves LEANN announcement messages
+- **Challenging Query**: Demonstrates ability to find specific content within conversation history
 
 ### Screenshots
 
 ![Sky Random RAG - Real Slack Integration](videos/slack_integration.png)
 
-![Sky Random RAG - Additional Demo](videos/slack_integration_2.png)
+![Sky Random RAG - Real Slack Integration Results](videos/slack_integration_2.png)
 
 ### Prerequisites
 
@@ -150,16 +150,36 @@ This example demonstrates a successful Slack RAG integration query against the S
 export SLACK_MCP_XOXP_TOKEN="xoxb-***-redacted-***"
 ```
 
-2) Run a real query against the “random” channel by channel ID (C0GN5BX0F)
+2) Run a real query against the "random" channel by channel ID (C0GN5BX0F)
 
 ```bash
-python test_channel_by_id_or_name.py \
-  --channel-id C0GN5BX0F \
+python -m apps.slack_rag \
+  --mcp-server "slack-mcp-server" \
   --workspace-name "Sky Lab Computing" \
-  --query "PUBPOL 290"
+  --channels C0GN5BX0F \
+  --max-messages-per-channel 1000 \
+  --query "What is LEANN about?"
 ```
 
-Expected: The output contains a matching message (e.g., “do we have a channel for class PUBPOL 290 this semester?”) followed by a compact RAG-style answer section.
+Expected: The system should retrieve the LEANN announcement message from Yichuan Wang, which contains:
+
+```
+Yichuan Wang Aug 8th at 3:27 PM
+We'd like to share LEANN — a local RAG system with a 97% smaller index that lets you chat with all your emails, file system, and more. It's fully Claude Code–compatible via a built-in semantic search MCP server.
+
+:loudspeaker: Tweet: https://x.com/YichuanM/status/1953886752240013803 (reposts appreciated :raised_hands:)
+:computer: Code: https://github.com/yichuan-w/LEANN (stars/shares welcome) (edited)
+
+X (formerly Twitter)X (formerly Twitter)
+Yichuan Wang (@YichuanM) on X
+1/N :rocket: Launching LEANN — the tiniest vector index on Earth!
+Fast, accurate, and 100% private RAG on your MacBook.
+0% internet. 97% smaller. Semantic search on everything.
+Your personal Jarvis, ready to dive into your emails, chats, and more.
+:link: Code: https://t.co/QwkYx1t0oa
+```
+
+This demonstrates the system's ability to find and retrieve specific announcements about LEANN from the conversation history.
 
 3) Optional: Ask a broader question
 
