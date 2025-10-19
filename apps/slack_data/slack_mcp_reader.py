@@ -203,6 +203,7 @@ class SlackMCPReader:
         # Common tool names might be: 'get_messages', 'list_messages', 'fetch_channel_history'
 
         tools = await self.list_available_tools()
+        logger.info(f"Available tools: {[tool.get('name') for tool in tools]}")
         message_tool = None
 
         # Look for a tool that can fetch messages - prioritize conversations_history
@@ -213,6 +214,7 @@ class SlackMCPReader:
             tool_name = tool.get("name", "").lower()
             if "conversations_history" in tool_name:
                 message_tool = tool
+                logger.info(f"Found conversations_history tool: {tool}")
                 break
 
         # If not found, look for other message-fetching tools
@@ -230,7 +232,7 @@ class SlackMCPReader:
             raise RuntimeError("No message fetching tool found in MCP server")
 
         # Prepare tool call parameters
-        tool_params = {"limit": limit}
+        tool_params = {"limit": "180d"}  # Use 180 days to get older messages
         if channel:
             # For conversations_history, use channel_id parameter
             if message_tool["name"] == "conversations_history":
@@ -240,6 +242,8 @@ class SlackMCPReader:
                 for param_name in ["channel", "channel_id", "channel_name"]:
                     tool_params[param_name] = channel
                     break
+
+        logger.info(f"Tool parameters: {tool_params}")
 
         fetch_request = {
             "jsonrpc": "2.0",
@@ -261,8 +265,8 @@ class SlackMCPReader:
                 try:
                     messages = json.loads(content["text"])
                 except json.JSONDecodeError:
-                    # If not JSON, treat as plain text
-                    messages = [{"text": content["text"], "channel": channel or "unknown"}]
+                    # If not JSON, try to parse as CSV format (Slack MCP server format)
+                    messages = self._parse_csv_messages(content["text"], channel)
             else:
                 messages = result["content"]
         else:
@@ -270,6 +274,56 @@ class SlackMCPReader:
             messages = result.get("messages", [result])
 
         return messages if isinstance(messages, list) else [messages]
+
+    def _parse_csv_messages(self, csv_text: str, channel: str) -> list[dict[str, Any]]:
+        """Parse CSV format messages from Slack MCP server."""
+        import csv
+        import io
+
+        messages = []
+        try:
+            # Split by lines and process each line as a CSV row
+            lines = csv_text.strip().split("\n")
+            if not lines:
+                return messages
+
+            # Skip header line if it exists
+            start_idx = 0
+            if lines[0].startswith("MsgID,UserID,UserName"):
+                start_idx = 1
+
+            for line in lines[start_idx:]:
+                if not line.strip():
+                    continue
+
+                # Parse CSV line
+                reader = csv.reader(io.StringIO(line))
+                try:
+                    row = next(reader)
+                    if len(row) >= 7:  # Ensure we have enough columns
+                        message = {
+                            "ts": row[0],
+                            "user": row[1],
+                            "username": row[2],
+                            "real_name": row[3],
+                            "channel": row[4],
+                            "thread_ts": row[5],
+                            "text": row[6],
+                            "time": row[7] if len(row) > 7 else "",
+                            "reactions": row[8] if len(row) > 8 else "",
+                            "cursor": row[9] if len(row) > 9 else "",
+                        }
+                        messages.append(message)
+                except Exception as e:
+                    logger.warning(f"Failed to parse CSV line: {line[:100]}... Error: {e}")
+                    continue
+
+        except Exception as e:
+            logger.warning(f"Failed to parse CSV messages: {e}")
+            # Fallback: treat entire text as one message
+            messages = [{"text": csv_text, "channel": channel or "unknown"}]
+
+        return messages
 
     def _format_message(self, message: dict[str, Any]) -> str:
         """Format a single message for indexing."""
@@ -342,6 +396,40 @@ class SlackMCPReader:
 
         return "\n".join(content_parts)
 
+    async def get_all_channels(self) -> list[str]:
+        """Get list of all available channels."""
+        try:
+            channels_list_request = {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {"name": "channels_list", "arguments": {}},
+            }
+            channels_response = await self.send_mcp_request(channels_list_request)
+            if "result" in channels_response:
+                result = channels_response["result"]
+                if "content" in result and isinstance(result["content"], list):
+                    content = result["content"][0] if result["content"] else {}
+                    if "text" in content:
+                        # Parse the channels from the response
+                        channels = []
+                        lines = content["text"].split("\n")
+                        for line in lines:
+                            if line.strip() and ("#" in line or "C" in line[:10]):
+                                # Extract channel ID or name
+                                parts = line.split()
+                                for part in parts:
+                                    if part.startswith("C") and len(part) > 5:
+                                        channels.append(part)
+                                    elif part.startswith("#"):
+                                        channels.append(part[1:])  # Remove #
+                        logger.info(f"Found {len(channels)} channels: {channels}")
+                        return channels
+            return []
+        except Exception as e:
+            logger.warning(f"Failed to get channels list: {e}")
+            return []
+
     async def read_slack_data(self, channels: Optional[list[str]] = None) -> list[str]:
         """
         Read Slack data and return formatted text chunks.
@@ -378,36 +466,33 @@ class SlackMCPReader:
                         logger.warning(f"Failed to fetch messages from channel {channel}: {e}")
                         continue
             else:
-                # Fetch from all available channels/conversations
-                # This is a simplified approach - real implementation would need to
-                # discover available channels first
-                try:
-                    messages = await self.fetch_slack_messages(limit=1000)
-                    if messages:
-                        # Group messages by channel if concatenating
-                        if self.concatenate_conversations:
-                            channel_messages = {}
-                            for message in messages:
-                                channel = message.get(
-                                    "channel", message.get("channel_name", "general")
-                                )
-                                if channel not in channel_messages:
-                                    channel_messages[channel] = []
-                                channel_messages[channel].append(message)
+                # Fetch from all available channels
+                logger.info("Fetching from all available channels...")
+                all_channels = await self.get_all_channels()
 
-                            # Create concatenated content for each channel
-                            for channel, msgs in channel_messages.items():
-                                text_content = self._create_concatenated_content(msgs, channel)
+                if not all_channels:
+                    # Fallback to common channel names if we can't get the list
+                    all_channels = ["general", "random", "announcements", "C0GN5BX0F"]
+                    logger.info(f"Using fallback channels: {all_channels}")
+
+                for channel in all_channels:
+                    try:
+                        logger.info(f"Searching channel: {channel}")
+                        messages = await self.fetch_slack_messages(channel=channel, limit=1000)
+                        if messages:
+                            if self.concatenate_conversations:
+                                text_content = self._create_concatenated_content(messages, channel)
                                 if text_content.strip():
                                     all_texts.append(text_content)
-                        else:
-                            # Process individual messages
-                            for message in messages:
-                                formatted_msg = self._format_message(message)
-                                if formatted_msg.strip():
-                                    all_texts.append(formatted_msg)
-                except Exception as e:
-                    logger.error(f"Failed to fetch messages: {e}")
+                            else:
+                                # Process individual messages
+                                for message in messages:
+                                    formatted_msg = self._format_message(message)
+                                    if formatted_msg.strip():
+                                        all_texts.append(formatted_msg)
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch messages from channel {channel}: {e}")
+                        continue
 
             return all_texts
 

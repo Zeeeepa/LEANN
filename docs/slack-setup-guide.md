@@ -120,22 +120,36 @@ python -m apps.slack_rag \
   --query "What did we discuss about the project?"
 ```
 
-### 4.3 Real RAG Query Example
+### 4.3 Real RAG Query Examples
 
-This example demonstrates a successful Slack RAG integration query against the Sky Lab Computing workspace's "random" channel. The system successfully retrieves actual conversation messages and performs semantic search with high relevance scores, including finding specific LEANN announcements.
+This section demonstrates successful Slack RAG integration queries against the Sky Lab Computing workspace's "random" channel. The system successfully retrieves actual conversation messages and performs semantic search with high relevance scores, including finding specific research paper announcements and technical discussions.
 
 **Key Features Demonstrated:**
 - **Real Slack Integration**: Successfully connects to Slack via MCP server
 - **Actual Message Retrieval**: Fetches real conversation history including specific announcements
 - **Working RAG Pipeline**: Complete index building, search, and response generation
-- **High Relevance Search**: Successfully finds and retrieves LEANN announcement messages
-- **Challenging Query**: Demonstrates ability to find specific content within conversation history
+- **High Relevance Search**: Successfully finds and retrieves specific research paper messages
+- **Individual Message Processing**: Demonstrates ability to find specific content within conversation history
 
-### Screenshots
+### Example 1: Advisor Models Query
 
-![Sky Random RAG - Real Slack Integration](videos/slack_integration.png)
+**Query:** "train black-box models to adopt to your personal data"
 
-![Sky Random RAG - Real Slack Integration Results](videos/slack_integration_2.png)
+This query demonstrates the system's ability to find specific research announcements about training black-box models for personal data adaptation.
+
+![Advisor Models Query - Setup](videos/slack_integration_1.png)
+
+![Advisor Models Query - Results](videos/slack_integration_1.2.png)
+
+### Example 2: Barbarians at the Gate Query
+
+**Query:** "AI-driven research systems ADRS"
+
+This query demonstrates the system's ability to find specific research announcements about AI-driven research systems and algorithm discovery.
+
+![Barbarians Query - Setup](videos/slack_integration_2.1.png)
+
+![Barbarians Query - Results](videos/slack_integration_2.2.png)
 
 ### Prerequisites
 
@@ -147,39 +161,38 @@ This example demonstrates a successful Slack RAG integration query against the S
 1) Set the workspace token for this shell
 
 ```bash
-export SLACK_MCP_XOXP_TOKEN="xoxb-***-redacted-***"
+export SLACK_MCP_XOXP_TOKEN="xoxp-***-redacted-***"
 ```
 
-2) Run a real query against the "random" channel by channel ID (C0GN5BX0F)
+2) Run queries against the "random" channel by channel ID (C0GN5BX0F)
 
+**Advisor Models Query:**
 ```bash
 python -m apps.slack_rag \
   --mcp-server "slack-mcp-server" \
   --workspace-name "Sky Lab Computing" \
   --channels C0GN5BX0F \
-  --max-messages-per-channel 1000 \
-  --query "What is LEANN about?"
+  --max-messages-per-channel 100000 \
+  --query "train black-box models to adopt to your personal data" \
+  --llm simulated \
+  --no-concatenate-conversations \
+  --force-rebuild
 ```
 
-Expected: The system should retrieve the LEANN announcement message from Yichuan Wang, which contains:
-
-```
-Yichuan Wang Aug 8th at 3:27 PM
-We'd like to share LEANN — a local RAG system with a 97% smaller index that lets you chat with all your emails, file system, and more. It's fully Claude Code–compatible via a built-in semantic search MCP server.
-
-:loudspeaker: Tweet: https://x.com/YichuanM/status/1953886752240013803 (reposts appreciated :raised_hands:)
-:computer: Code: https://github.com/yichuan-w/LEANN (stars/shares welcome) (edited)
-
-X (formerly Twitter)X (formerly Twitter)
-Yichuan Wang (@YichuanM) on X
-1/N :rocket: Launching LEANN — the tiniest vector index on Earth!
-Fast, accurate, and 100% private RAG on your MacBook.
-0% internet. 97% smaller. Semantic search on everything.
-Your personal Jarvis, ready to dive into your emails, chats, and more.
-:link: Code: https://t.co/QwkYx1t0oa
+**Barbarians at the Gate Query:**
+```bash
+python -m apps.slack_rag \
+  --mcp-server "slack-mcp-server" \
+  --workspace-name "Sky Lab Computing" \
+  --channels C0GN5BX0F \
+  --max-messages-per-channel 100000 \
+  --query "AI-driven research systems ADRS" \
+  --llm simulated \
+  --no-concatenate-conversations \
+  --force-rebuild
 ```
 
-This demonstrates the system's ability to find and retrieve specific announcements about LEANN from the conversation history.
+These examples demonstrate the system's ability to find and retrieve specific research announcements and technical discussions from the conversation history, showcasing the power of semantic search in Slack data.
 
 3) Optional: Ask a broader question
 

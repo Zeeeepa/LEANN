@@ -146,8 +146,11 @@ class SlackMCPRAG(BaseRAGExample):
         if args.workspace_name:
             print(f"Workspace: {args.workspace_name}")
 
-        if args.channels:
-            print(f"Channels: {', '.join(args.channels)}")
+        # Filter out empty strings from channels
+        channels = [ch for ch in args.channels if ch.strip()] if args.channels else None
+
+        if channels:
+            print(f"Channels: {', '.join(channels)}")
         else:
             print("Fetching from all available channels")
 
@@ -166,7 +169,7 @@ class SlackMCPRAG(BaseRAGExample):
                 retry_delay=args.retry_delay,
             )
 
-            texts = await reader.read_slack_data(channels=args.channels)
+            texts = await reader.read_slack_data(channels=channels)
 
             if not texts:
                 print("No messages found! This could mean:")
