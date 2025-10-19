@@ -27,11 +27,11 @@ LEANN's Slack integration uses MCP (Model Context Protocol) servers to fetch and
 
 ### 1.2 Configure App Permissions
 
-#### Bot Token Scopes
+#### Token Scopes
 
 1. In your app dashboard, go to **"OAuth & Permissions"** in the left sidebar
 2. Scroll down to **"Scopes"** section
-3. Under **"Bot Token Scopes"**, click **"Add an OAuth Scope"**
+3. Under **"Bot Token Scopes & OAuth Scope"**, click **"Add an OAuth Scope"**
 4. Add the following scopes:
    - `channels:read` - Read public channel information
    - `channels:history` - Read messages in public channels
@@ -62,6 +62,7 @@ Some MCP servers may require app-level tokens:
 2. Click **"Install to Workspace"**
 3. Review the permissions and click **"Allow"**
 4. Copy the **"Bot User OAuth Token"** (starts with `xoxb-`)
+5. Copy the **"User OAuth Token"** (starts with `xoxp-`)
 
 ## Step 2: Install Slack MCP Server
 
@@ -82,13 +83,44 @@ npm install slack-mcp-server
 npx slack-mcp-server
 ```
 
-## Step 3: Configure Environment Variables
+## Step 3: Install and Configure Ollama (for Real LLM Responses)
+
+### 3.1 Install Ollama
+
+```bash
+# Install Ollama using Homebrew (macOS)
+brew install ollama
+
+# Or download from https://ollama.ai/
+```
+
+### 3.2 Start Ollama Service
+
+```bash
+# Start Ollama as a service
+brew services start ollama
+
+# Or start manually
+ollama serve
+```
+
+### 3.3 Pull a Model
+
+```bash
+# Pull a lightweight model for testing
+ollama pull llama3.2:1b
+
+# Verify the model is available
+ollama list
+```
+
+## Step 4: Configure Environment Variables
 
 Create a `.env` file or set environment variables:
 
 ```bash
-# Required: Bot User OAuth Token
-SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+# Required: User OAuth Token
+SLACK_OAUTH_TOKEN=xoxp-your-user-oauth-token-here
 
 # Optional: App-Level Token (if your MCP server requires it)
 SLACK_APP_TOKEN=xapp-your-app-token-here
@@ -97,9 +129,9 @@ SLACK_APP_TOKEN=xapp-your-app-token-here
 SLACK_WORKSPACE_ID=T1234567890  # Your workspace ID (optional)
 ```
 
-## Step 4: Test the Setup
+## Step 5: Test the Setup
 
-### 4.1 Test MCP Server Connection
+### 5.1 Test MCP Server Connection
 
 ```bash
 python -m apps.slack_rag \
@@ -110,7 +142,7 @@ python -m apps.slack_rag \
 
 This will test the connection and list available tools without indexing any data.
 
-### 4.2 Index a Specific Channel
+### 5.2 Index a Specific Channel
 
 ```bash
 python -m apps.slack_rag \
@@ -120,7 +152,7 @@ python -m apps.slack_rag \
   --query "What did we discuss about the project?"
 ```
 
-### 4.3 Real RAG Query Examples
+### 5.3 Real RAG Query Examples
 
 This section demonstrates successful Slack RAG integration queries against the Sky Lab Computing workspace's "random" channel. The system successfully retrieves actual conversation messages and performs semantic search with high relevance scores, including finding specific research paper announcements and technical discussions.
 
@@ -130,6 +162,7 @@ This section demonstrates successful Slack RAG integration queries against the S
 - **Working RAG Pipeline**: Complete index building, search, and response generation
 - **High Relevance Search**: Successfully finds and retrieves specific research paper messages
 - **Individual Message Processing**: Demonstrates ability to find specific content within conversation history
+- **Real LLM Responses**: Uses Ollama with llama3.2:1b for actual AI-generated responses
 
 ### Example 1: Advisor Models Query
 
@@ -137,9 +170,11 @@ This section demonstrates successful Slack RAG integration queries against the S
 
 This query demonstrates the system's ability to find specific research announcements about training black-box models for personal data adaptation.
 
-![Advisor Models Query - Setup](videos/slack_integration_1.png)
+![Advisor Models Query - Command Setup](videos/slack_integration_1.1.png)
 
-![Advisor Models Query - Results](videos/slack_integration_1.2.png)
+![Advisor Models Query - Search Results](videos/slack_integration_1.2.png)
+
+![Advisor Models Query - LLM Response](videos/slack_integration_1.3.png)
 
 ### Example 2: Barbarians at the Gate Query
 
@@ -147,9 +182,11 @@ This query demonstrates the system's ability to find specific research announcem
 
 This query demonstrates the system's ability to find specific research announcements about AI-driven research systems and algorithm discovery.
 
-![Barbarians Query - Setup](videos/slack_integration_2.1.png)
+![Barbarians Query - Command Setup](videos/slack_integration_2.1.png)
 
-![Barbarians Query - Results](videos/slack_integration_2.2.png)
+![Barbarians Query - Search Results](videos/slack_integration_2.2.png)
+
+![Barbarians Query - LLM Response](videos/slack_integration_2.3.png)
 
 ### Prerequisites
 
@@ -174,9 +211,10 @@ python -m apps.slack_rag \
   --channels C0GN5BX0F \
   --max-messages-per-channel 100000 \
   --query "train black-box models to adopt to your personal data" \
-  --llm simulated \
-  --no-concatenate-conversations \
-  --force-rebuild
+  --llm ollama \
+  --llm-model "llama3.2:1b" \
+  --llm-host "http://localhost:11434" \
+  --no-concatenate-conversations
 ```
 
 **Barbarians at the Gate Query:**
@@ -187,9 +225,10 @@ python -m apps.slack_rag \
   --channels C0GN5BX0F \
   --max-messages-per-channel 100000 \
   --query "AI-driven research systems ADRS" \
-  --llm simulated \
-  --no-concatenate-conversations \
-  --force-rebuild
+  --llm ollama \
+  --llm-model "llama3.2:1b" \
+  --llm-host "http://localhost:11434" \
+  --no-concatenate-conversations
 ```
 
 These examples demonstrate the system's ability to find and retrieve specific research announcements and technical discussions from the conversation history, showcasing the power of semantic search in Slack data.
@@ -317,6 +356,8 @@ python -m apps.slack_rag \
 - [ ] Bot token (xoxb-) copied correctly
 - [ ] App-level token (xapp-) created if needed
 - [ ] MCP server installed and accessible
+- [ ] Ollama installed and running (`brew services start ollama`)
+- [ ] Ollama model pulled (`ollama pull llama3.2:1b`)
 - [ ] Environment variables set correctly
 - [ ] Bot invited to relevant channels
 - [ ] Channel names specified without # symbol
@@ -330,7 +371,8 @@ If you continue to have issues:
 1. **Check Logs**: Look for detailed error messages in the console output
 2. **Test MCP Server**: Use `--test-connection` to verify the MCP server is working
 3. **Verify Tokens**: Double-check that your Slack tokens are valid and have the right scopes
-4. **Community Support**: Reach out to the LEANN community for help
+4. **Check Ollama**: Ensure Ollama is running (`ollama serve`) and the model is available (`ollama list`)
+5. **Community Support**: Reach out to the LEANN community for help
 
 ## Example Commands
 
